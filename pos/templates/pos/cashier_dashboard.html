@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cashier Terminal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Poppins', sans-serif; background-color: #f1f5f9; }
+        .navbar { background: #ffffff; border-bottom: 1px solid #e2e8f0; }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; opacity: 0; transform: translateY(10px); }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+        
+        .ticket-card { border-radius: 16px; border: 1px solid #e2e8f0; cursor: pointer; transition: 0.2s; background: white; }
+        .ticket-card:hover { transform: translateY(-3px); border-color: #0ea5e9; box-shadow: 0 10px 20px rgba(14, 165, 233, 0.1); }
+        .checkout-panel { border-radius: 24px; border: none; box-shadow: 0 25px 50px rgba(0,0,0,0.05); }
+        .form-select-lg, .form-control-lg { border-radius: 12px; font-size: 1rem; }
+    </style>
+</head>
+<body>
+    <nav class="navbar shadow-sm sticky-top py-3">
+        <div class="container-fluid px-4">
+            <span class="navbar-brand h4 fw-bold m-0 text-dark">Lekali Java <span class="badge bg-info bg-opacity-10 text-info ms-2 rounded-pill fs-7">Cashier</span></span>
+            <div class="d-flex align-items-center gap-3">
+                <span class="fw-semibold text-secondary">👤 {{ request.user.username|title }}</span>
+                <form action="{% url 'logout' %}" method="post" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-light text-danger rounded-pill px-4 fw-bold">Log out</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 mt-4">
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <h5 class="fw-bold text-slate-700 mb-4">Pending Settlements <span class="badge bg-secondary rounded-pill ms-2">{{ pending_orders|length }}</span></h5>
+                <div class="row g-3">
+                    {% for order in pending_orders %}
+                        <div class="col-md-6 fade-in" style="animation-delay: {{ forloop.counter0 }}00ms;">
+                            <div class="card ticket-card p-4" onclick="selectOrder({{ order.id }}, {{ order.table.number }}, {{ order.total }})">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h4 class="fw-bold text-dark m-0">Table {{ order.table.number }}</h4>
+                                    <span class="badge bg-warning bg-opacity-25 text-warning rounded-pill px-3 py-1">Unpaid</span>
+                                </div>
+                                <div class="bg-light p-3 rounded-3 d-flex justify-content-between align-items-center border">
+                                    <span class="text-secondary small">Ticket #{{ order.id }}</span>
+                                    <h5 class="fw-bold text-primary m-0">Rs. {{ order.total }}</h5>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="col-12 fade-in"><div class="alert alert-success bg-success bg-opacity-10 text-success border-0 rounded-4 p-4 text-center fw-bold">🎉 No pending bills.</div></div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card checkout-panel bg-white p-5 fade-in" style="animation-delay: 0.2s;">
+                    <div class="text-center mb-4 pb-4 border-bottom">
+                        <p class="text-secondary fw-semibold mb-1 text-uppercase">Settling For</p>
+                        <h2 class="fw-bold text-dark display-6 m-0">Table <span id="checkout-table" class="text-primary">-</span></h2>
+                    </div>
+                    
+                    <div class="text-center mb-5">
+                        <p class="text-secondary fw-semibold mb-1 text-uppercase">Amount Due</p>
+                        <h1 class="fw-bold text-success display-4 m-0">Rs. <span id="checkout-total">0.00</span></h1>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold text-dark">Payment Method</label>
+                        <select id="payment-method" class="form-select form-select-lg shadow-sm">
+                            <option value="Cash">💵 Cash</option>
+                            <option value="Fonepay">📱 Fonepay / QR</option>
+                            <option value="Card">💳 Credit Card</option>
+                            <option value="Due">📝 Due (Account)</option>
+                        </select>
+                    </div>
+
+                    <div id="cash-calculator" class="mb-4">
+                        <label class="form-label fw-semibold text-dark">Amount Tendered</label>
+                        <input type="number" id="amount-received" class="form-control form-control-lg shadow-sm mb-3" placeholder="Rs..." oninput="calc()">
+                        <div class="d-flex justify-content-between p-3 bg-light rounded-3 border">
+                            <span class="fw-semibold text-secondary">Change Due</span>
+                            <h5 class="fw-bold m-0 text-danger" id="change-due">Rs. 0.00</h5>
+                        </div>
+                    </div>
+
+                    <div id="due-customer-info" class="mb-4 d-none p-3 bg-light border rounded-3">
+                        <label class="form-label fw-semibold text-dark small text-uppercase">Customer Info</label>
+                        <input type="text" id="cust-name" class="form-control mb-2" placeholder="Full Name">
+                        <input type="text" id="cust-phone" class="form-control" placeholder="Phone / Details">
+                    </div>
+
+                    <button id="settle-btn" class="btn btn-success btn-lg w-100 fw-bold rounded-pill shadow-sm py-3" onclick="settleBill()" disabled>Process Payment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Modal -->
+    <div class="modal fade" id="qrModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content border-0 shadow-lg rounded-4"><div class="modal-body text-center p-4"><h5 class="fw-bold text-primary mb-3">Fonepay Scan</h5><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=LekaliJava" class="img-fluid rounded-3 mb-3 border p-2"><h4 class="fw-bold text-success mb-0">Rs. <span id="qr-total"></span></h4></div></div></div></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currId = null, currTotal = 0;
+        function selectOrder(id, table, total) {
+            currId = id; currTotal = parseFloat(total);
+            document.getElementById('checkout-table').innerText = table;
+            document.getElementById('checkout-total').innerText = currTotal.toFixed(2);
+            document.getElementById('qr-total').innerText = currTotal.toFixed(2);
+            document.getElementById('settle-btn').disabled = false;
+            document.getElementById('amount-received').value = '';
+            document.getElementById('payment-method').dispatchEvent(new Event('change'));
+        }
+        document.getElementById('payment-method').addEventListener('change', function() {
+            document.getElementById('cash-calculator').classList.toggle('d-none', this.value !== 'Cash');
+            document.getElementById('due-customer-info').classList.toggle('d-none', this.value !== 'Due');
+            if(this.value === 'Fonepay' && currId) new bootstrap.Modal(document.getElementById('qrModal')).show();
+        });
+        function calc() {
+            let change = (parseFloat(document.getElementById('amount-received').value) || 0) - currTotal;
+            const d = document.getElementById('change-due');
+            d.innerText = `Rs. ${(change >= 0 ? change : 0).toFixed(2)}`;
+            d.className = change >= 0 ? "fw-bold m-0 text-success" : "fw-bold m-0 text-danger";
+        }
+        function settleBill() {
+            if(!currId) return; const method = document.getElementById('payment-method').value;
+            let n = document.getElementById('cust-name').value.trim(), p = document.getElementById('cust-phone').value.trim();
+            if(method === 'Due' && (!n || !p)) return alert("Need Customer Name & Phone");
+            document.getElementById('settle-btn').disabled = true;
+            fetch('/settle-order/', { method: 'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+                body: JSON.stringify({order_id: currId, payment_method: method, customer_name: n, customer_phone: p})
+            }).then(r=>r.json()).then(d=>{if(d.status==='success') location.reload();});
+        }
+    </script>
+</body>
+</html>
